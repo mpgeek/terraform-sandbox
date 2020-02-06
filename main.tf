@@ -3,6 +3,10 @@ provider "aws" {
 }
 
 resource "aws_instance" "example" {
-  ami           = "ami-0c55b159cbfafe1f0"
+  ami           = "ami-08bc77a2c7eb2b1da"
   instance_type = "t2.micro"
+
+  tags = {
+    Name = "terraform-example"
+  }
 }
