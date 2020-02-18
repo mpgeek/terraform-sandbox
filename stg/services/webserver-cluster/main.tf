@@ -1,3 +1,9 @@
+terraform {
+  backend "s3" {
+    key = "tf-example/stg/services/terraform.tfstate"
+  }
+}
+
 provider "aws" {
   region = "us-east-1"
 }
@@ -12,6 +18,18 @@ data "aws_subnet_ids" "default" {
   vpc_id = data.aws_vpc.default.id
 }
 
+# Get db meta from db state.
+data "terraform_remote_state" "db" {
+  backend = "s3"
+
+  # @TODO: template or variableize this.
+  config = {
+    bucket = "etm-terraform-state"
+    key = "tf-example/stg/data-store/mysql/terraform.tfstate"
+    region = "us-east-1"
+  }
+}
+
 resource "aws_security_group" "example" {
   name = "terraform-example-instance"
 
@@ -23,17 +41,24 @@ resource "aws_security_group" "example" {
   }
 }
 
+data "template_file" "user_data" {
+  template = file("user-data.sh")
+
+  vars = {
+    webserver_port = var.webserver_port
+
+    # Since we have data-store/mysql/outputs.tf.
+    db_address = data.terraform_remote_state.db.outputs.address
+    db_port = data.terraform_remote_state.db.outputs.port
+  }
+}
+
 resource "aws_launch_configuration" "example" {
-  image_id         = "ami-08bc77a2c7eb2b1da"
-  instance_type    = "t2.micro"
+  image_id        = "ami-08bc77a2c7eb2b1da"
+  instance_type   = "t2.micro"
   security_groups = [aws_security_group.example.id]
 
-  # Hello world webserver.
-  user_data = <<-EOF
-              #!/bin/bash
-              echo "Hello, World!" > index.html
-              nohup busybox httpd -f -p ${var.webserver_port} &
-              EOF
+  user_data = data.template_file.user_data.rendered
 
   # Required when using launch configs with autoscaling groups.
   # @see https://www.terraform.io/docs/providers/aws/r/launch_configuration.html#using-with-autoscaling-groups
@@ -132,7 +157,7 @@ resource "aws_lb_target_group" "asg" {
 
 resource "aws_lb_listener_rule" "asg" {
   listener_arn = aws_lb_listener.http.arn
-  priority = 100
+  priority     = 100
 
   condition {
     path_pattern {
@@ -141,7 +166,7 @@ resource "aws_lb_listener_rule" "asg" {
   }
 
   action {
-    type = "forward"
+    type             = "forward"
     target_group_arn = aws_lb_target_group.asg.arn
   }
 }
