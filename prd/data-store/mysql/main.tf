@@ -1,11 +1,11 @@
 locals {
   aws_region = "us-east-1"
-  db_instance_id_prefix = "tf-example-stg"
+  db_instance_id_prefix = "tf-example-prd"
 }
 
 terraform {
   backend "s3" {
-    key = "tf-example/stg/data-store/mysql/terraform.tfstate"
+    key = "tf-example/prd/data-store/mysql/terraform.tfstate"
   }
 }
 
